@@ -21,13 +21,17 @@
         -8개의 심볼 랜덤 고르기
         -8개의 심볼이 든 카드 만들기
         -중복 심볼 판별
+        -레벨 별로 카드 수 다르게
+        -무빙 심볼
         
     겹치는 심볼의 이름을 타이핑하고 정답인지 아닌지 구분하기
-        정답이면, 내 카드의 수가 하나 줄어들고 상대방에게 넘어감
+        정답이면, 내 카드의 수가 하나 증가
         오답이면, 카드 수가 하나 늘어남
     제한시간 내에 남은 카드 의 수
         0개 이상이면 게임 실패
-        0개면 게임 성공 -> 다시 하시겠습니까? 뜨기
+        0개면 게임 성공
+            -타임셋
+    
     -->
     <style>
       body {
@@ -93,7 +97,7 @@
       }
       #answer {
         padding: 7px;
-        width: 200px;
+        width: 230px;
       }
       #btn {
         padding: 9px;
@@ -101,6 +105,10 @@
         border: none;
         border-radius: 10px;
         width: 80px;
+      }
+      #setting {
+        margin-top: 20px;
+        margin-left: 10px;
       }
     </style>
   </head>
@@ -125,9 +133,9 @@
         <h2>
           <div id="feedback">겹치는 심볼을 입력하세요</div>
         </h2>
-
-        <input id="answer" type="text"/>
-        <button id="btn">제출</button>
+        <form id="gameForm" autocomplete="off">
+          <input id="answer" type="text" />
+        </form>
 
         <div id="setting">
           <button id="start" class="start">시작하기</button>
@@ -173,8 +181,6 @@
       const yourCard = document.getElementById("yourCard");
       const feedback = document.getElementById("feedback");
       const answerInput = document.getElementById("answer");
-      const btn = document.getElementById("btn");
-      const againBtn = document.getElementById("again");
       const startBtn = document.getElementById("start");
       const myCountEl = document.getElementById("myCount");
       const timeBar = document.getElementById("timeBar");
@@ -208,7 +214,6 @@
       function makeRandomCard() {
         my = pickSymbols();
         your = pickSymbols();
-        return { my, your };
       }
 
       // 심볼 화면에 그리기
@@ -243,6 +248,20 @@
         };
       }
 
+      // 겹치는 심볼의 이름 찾기
+      function findSymbolsNames() {
+        const matches = [];
+        for (let a of my) {
+          for (let b of your) {
+            if (a.name === b.name) {
+              matches.push(a.name);
+            }
+          }
+        }
+        return matches;
+      }
+
+      //화면에 카드 출력
       function drawCards() {
         myCard.innerHTML = "";
         yourCard.innerHTML = "";
@@ -260,19 +279,6 @@
           mySymbols.forEach((s) => s.move());
           yourSymbols.forEach((s) => s.move());
         }, 1000 / 60);
-      }
-
-      // 겹치는 심볼의 이름 찾기
-      function findSymbolsNames() {
-        const matches = [];
-        for (let a of my) {
-          for (let b of your) {
-            if (a.name === b.name) {
-              matches.push(a.name);
-            }
-          }
-        }
-        return matches;
       }
 
       //난이도 설정하기
@@ -302,7 +308,7 @@
 
         timerId = setInterval(() => {
           remaining--;
-          const percent = (remaining / 60) * 100;
+          const percent = (remaining / duration) * 100;
           timeBar.style.width = percent + "%";
 
           if (percent < 30) timeBar.style.background = "red";
@@ -312,12 +318,13 @@
             clearInterval(timerId);
             clearInterval(moveTimer);
             alert("⏰ 시간 초과! 다시하세요!");
-            document.getElementById("start").click();
+            isRunning = false;
           }
         }, 1000);
       }
 
-      btn.addEventListener("click", () => {
+      //입력 처리
+      function submitAnswer() {
         const answer = document.getElementById("answer").value;
         const correct = findSymbolsNames();
 
@@ -333,7 +340,7 @@
         answerInput.value = "";
 
         if (myCardsLeft === 0) {
-          alert("승리하였습니다");
+          alert("성공하셨습니다.");
           clearInterval(timerId);
           clearInterval(moveTimer);
           isRunning = false;
@@ -342,6 +349,11 @@
 
         makeRandomCard();
         drawCards();
+      }
+
+      document.getElementById("gameForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        submitAnswer();
       });
 
       startBtn.addEventListener("click", () => {
@@ -356,4 +368,3 @@
     </script>
   </body>
 </html>
-
