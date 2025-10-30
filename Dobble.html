@@ -195,7 +195,7 @@
       let myCardsLeft = total;
 
       let moveTimer = null;
-      let duration = 60;
+      let duration = 30;
       let timerId = null;
       let isRunning = false;
 
@@ -217,6 +217,7 @@
       }
 
       // 심볼 화면에 그리기
+
       function randomSpeed(maxSpeed) {
         return Math.random() * maxSpeed - Math.random() * maxSpeed;
       }
@@ -300,6 +301,7 @@
         answerInput.value = "";
       }
 
+      //타이머
       function startTimer() {
         clearInterval(timerId);
         timeBar.style.width = "100%";
@@ -314,7 +316,7 @@
           if (percent < 30) timeBar.style.background = "red";
           else if (percent < 50) timeBar.style.background = "orange";
 
-          if (remaining <= 0) {
+          if (remaining <= -1) {
             clearInterval(timerId);
             clearInterval(moveTimer);
             alert("⏰ 시간 초과! 다시하세요!");
