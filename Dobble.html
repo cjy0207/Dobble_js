@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <!--
+    Dobble game 룰
+    같은 그림의 이미지가 있으면 그 이미지의 이름을 타이핑해서 자신의 카드를 하나씩 줄여나가는 게임
+    15개의 심볼이 있고 한장의 카드에는 8개의 심볼이 들어있는 카드 30장이 존재한다
+    단, 어떤 카드 두장을 펼쳐도 항상 똑같은 이미지가 한개 이상은 존재한다(사노 평면(중복의 갯수가 하나)...or 중복의 갯수만 한개 이상 맞추기)
+    게임 시간은 30초이고 처음 내 카드는 15장으로 시작한다
+    제한 시간 내에 남은 카드 갯수가 0이되면 내가 이기고, 시간 초과시 남은 카드가 한개 이상이면 내가 지는 게임이다.
+    -->
+
+    <!--
+    로직 구현
+    타임리밋 30초
+    내 카드 15장과 중앙 15장
+    카드 한장 당 8개의 심볼(임의의 카드 두장에는 똑같은 이미지가 한장이상은 존재한다 -> 중복의 갯수가 한개 이상이기만 하면 되는 방법으로 구현
+        -8개의 심볼 랜덤 고르기
+        -8개의 심볼이 든 카드 만들기
+        -중복 심볼 판별
+        
+    겹치는 심볼의 이름을 타이핑하고 정답인지 아닌지 구분하기
+        정답이면, 내 카드의 수가 하나 줄어들고 상대방에게 넘어감
+        오답이면, 카드 수가 하나 늘어남
+    제한시간 내에 남은 카드 의 수
+        0개 이상이면 게임 실패
+        0개면 게임 성공 -> 다시 하시겠습니까? 뜨기
+    -->
+    <style>
+      body {
+        background-color: #171b25;
+        color: white;
+      }
+      .board {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+      }
+      .card {
+        background-color: #232938;
+        width: 500px;
+        height: 500px;
+        border-radius: 20px;
+        position: relative;
+        top: 10px;
+      }
+      .card-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .card-title {
+        font-size: 20px;
+        font-weight: bold;
+        color: #fff;
+        text-align: center;
+        height: 10px;
+      }
+      .box {
+        display: flex;
+        justify-content: center;
+        background-color: #232938;
+        height: 200px;
+        margin-top: 50px;
+        border-radius: 20px;
+      }
+      .answerbox {
+        text-align: center;
+      }
+      .start {
+        padding: 13px;
+        background-color: rgb(40, 249, 40);
+        border: none;
+        border-radius: 10px;
+        width: 110px;
+      }
+      .level {
+        padding: 13px;
+        background-color: rgb(249, 40, 85);
+        border: none;
+        border-radius: 10px;
+        width: 110px;
+      }
+      #timeBar {
+        width: 100%;
+        height: 15px;
+        margin-top: 10px;
+        transition: width 1s linear;
+        border-radius: 8px;
+      }
+      #answer {
+        padding: 7px;
+        width: 200px;
+      }
+      #btn {
+        padding: 9px;
+        background-color: rgb(40, 249, 40);
+        border: none;
+        border-radius: 10px;
+        width: 80px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <div class="card-wrapper">
+        <div id="yourCard" class="card"></div>
+        <h2 class="card-title">컴퓨터🤖</h2>
+      </div>
+      <div class="card-wrapper">
+        <div id="myCard" class="card"></div>
+        <h2 class="card-title">
+          <div id="counter" class="card-title">
+            내 카드 : <b id="myCount">-</b>
+          </div>
+        </h2>
+      </div>
+    </div>
+
+    <div id="box" class="box">
+      <div id="answerbox">
+        <h2>
+          <div id="feedback">겹치는 심볼을 입력하세요</div>
+        </h2>
+
+        <input id="answer" type="text"/>
+        <button id="btn">제출</button>
+
+        <div id="setting">
+          <button id="start" class="start">시작하기</button>
+          <select id="level" class="level" onchange="level()">
+            <option value="1" selected="selected">LEVEL1</option>
+            <option value="2">LEVEL2</option>
+            <option value="3">LEVEL3</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="timeBar"></div>
+
+    <script>
+      const symbols = [
+        { icon: "⭐", name: "별" },
+        { icon: "🍎", name: "사과" },
+        { icon: "🍌", name: "바나나" },
+        { icon: "🍇", name: "포도" },
+        { icon: "🍓", name: "딸기" },
+        { icon: "🍉", name: "수박" },
+        { icon: "🍍", name: "파인애플" },
+        { icon: "🥕", name: "당근" },
+        { icon: "🌽", name: "옥수수" },
+        { icon: "🍄", name: "버섯" },
+        { icon: "🌙", name: "달" },
+        { icon: "☀️", name: "해" },
+        { icon: "⚡️", name: "번개" },
+        { icon: "🔥", name: "불" },
+        { icon: "💧", name: "물" },
+      ];
+
+      const LEVEL_CARDS = {
+        1: 10,
+        2: 15,
+        3: 20,
+      };
+
+      const per = 8;
+
+      const myCard = document.getElementById("myCard");
+      const yourCard = document.getElementById("yourCard");
+      const feedback = document.getElementById("feedback");
+      const answerInput = document.getElementById("answer");
+      const btn = document.getElementById("btn");
+      const againBtn = document.getElementById("again");
+      const startBtn = document.getElementById("start");
+      const myCountEl = document.getElementById("myCount");
+      const timeBar = document.getElementById("timeBar");
+
+      let my = [];
+      let your = [];
+      let mySymbols = [];
+      let yourSymbols = [];
+
+      let currentLevel = 1;
+      let total = LEVEL_CARDS[currentLevel];
+      let myCardsLeft = total;
+
+      let moveTimer = null;
+      let duration = 60;
+      let timerId = null;
+      let isRunning = false;
+
+      // 8개의 랜덤 심볼 뽑기
+      function pickSymbols() {
+        const picks = [];
+        while (picks.length < per) {
+          const pick = Math.floor(Math.random() * symbols.length);
+          if (!picks.includes(pick)) picks.push(pick);
+        }
+        const card = picks.map((i) => symbols[i]);
+        return card;
+      }
+
+      // 8개의 심볼이 랜덤으로 들어있는 카드 만들기
+      function makeRandomCard() {
+        my = pickSymbols();
+        your = pickSymbols();
+        return { my, your };
+      }
+
+      // 심볼 화면에 그리기
+      function randomSpeed(maxSpeed) {
+        return Math.random() * maxSpeed - Math.random() * maxSpeed;
+      }
+
+      function MovingSymbols(sym, parent) {
+        this.x = Math.random() * 440;
+        this.y = Math.random() * 440;
+        this.vX = randomSpeed(2);
+        this.vY = randomSpeed(2);
+
+        this.el = document.createElement("div");
+        this.el.innerHTML = sym.icon;
+        this.el.style.position = "absolute";
+        this.el.style.left = this.x + "px";
+        this.el.style.top = this.y + "px";
+        this.el.style.fontSize = "60px";
+
+        parent.appendChild(this.el);
+
+        this.move = () => {
+          this.x += this.vX;
+          this.y += this.vY;
+
+          if (this.x < 0 || this.x > 440) this.vX *= -1;
+          if (this.y < 0 || this.y > 440) this.vY *= -1;
+
+          this.el.style.left = this.x + "px";
+          this.el.style.top = this.y + "px";
+        };
+      }
+
+      function drawCards() {
+        myCard.innerHTML = "";
+        yourCard.innerHTML = "";
+
+        my.forEach((sym) => {
+          mySymbols.push(new MovingSymbols(sym, myCard));
+        });
+
+        your.forEach((sym) => {
+          yourSymbols.push(new MovingSymbols(sym, yourCard));
+        });
+
+        clearInterval(moveTimer);
+        moveTimer = setInterval(() => {
+          mySymbols.forEach((s) => s.move());
+          yourSymbols.forEach((s) => s.move());
+        }, 1000 / 60);
+      }
+
+      // 겹치는 심볼의 이름 찾기
+      function findSymbolsNames() {
+        const matches = [];
+        for (let a of my) {
+          for (let b of your) {
+            if (a.name === b.name) {
+              matches.push(a.name);
+            }
+          }
+        }
+        return matches;
+      }
+
+      //난이도 설정하기
+      function level() {
+        const lv = Number(document.getElementById("level").value);
+
+        if (isRunning) {
+          alert("레벨이 변경되었습니다. 시작하기를 눌러주세요");
+
+          clearInterval(timerId);
+          clearInterval(moveTimer);
+          isRunning = false;
+        }
+        currentLevel = lv;
+        total = LEVEL_CARDS[currentLevel];
+
+        myCardsLeft = total;
+        myCountEl.textContent = myCardsLeft;
+        answerInput.value = "";
+      }
+
+      function startTimer() {
+        clearInterval(timerId);
+        timeBar.style.width = "100%";
+        timeBar.style.background = "rgb(40, 249, 40)";
+        let remaining = duration;
+
+        timerId = setInterval(() => {
+          remaining--;
+          const percent = (remaining / 60) * 100;
+          timeBar.style.width = percent + "%";
+
+          if (percent < 30) timeBar.style.background = "red";
+          else if (percent < 50) timeBar.style.background = "orange";
+
+          if (remaining <= 0) {
+            clearInterval(timerId);
+            clearInterval(moveTimer);
+            alert("⏰ 시간 초과! 다시하세요!");
+            document.getElementById("start").click();
+          }
+        }, 1000);
+      }
+
+      btn.addEventListener("click", () => {
+        const answer = document.getElementById("answer").value;
+        const correct = findSymbolsNames();
+
+        if (correct.includes(answer)) {
+          myCardsLeft--;
+          feedback.textContent = "정답";
+        } else {
+          myCardsLeft++;
+          feedback.textContent = "오답";
+        }
+
+        myCountEl.textContent = myCardsLeft;
+        answerInput.value = "";
+
+        if (myCardsLeft === 0) {
+          alert("승리하였습니다");
+          clearInterval(timerId);
+          clearInterval(moveTimer);
+          isRunning = false;
+          return;
+        }
+
+        makeRandomCard();
+        drawCards();
+      });
+
+      startBtn.addEventListener("click", () => {
+        myCardsLeft = total;
+        myCountEl.textContent = myCardsLeft;
+        feedback.textContent = "겹치는 심볼을 입력하세요";
+        makeRandomCard();
+        drawCards();
+        startTimer();
+        isRunning = true;
+      });
+    </script>
+  </body>
+</html>
+
