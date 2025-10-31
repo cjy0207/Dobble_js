@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dobble (Emoji + Projective Plane)</title>
+  <style>
+    body { background:#171b25; color:#fff; margin:0; font-family:system-ui, sans-serif; }
+    .board { display:flex; justify-content:center; gap:20px; flex-wrap:wrap; padding:16px; }
+    .card { background:#232938; width:500px; height:500px; border-radius:20px; position:relative; }
+    .card-wrapper { display:flex; flex-direction:column; align-items:center; gap:8px; }
+    .card-title { font-size:20px; font-weight:700; }
+    .box { display:flex; justify-content:center; background:#232938; border-radius:20px; margin:16px; padding:16px 20px; }
+    #answerbox { text-align:center; }
+    .start, .level { padding:12px 14px; border:none; border-radius:10px; cursor:pointer; }
+    .start { background:rgb(40,249,40); }
+    .level { background:rgb(249,40,85); color:#fff; }
+    #timeBar { width:100%; height:15px; margin:8px 0 0; transition: width 1s linear; border-radius:8px; background:rgb(40,249,40); }
+    #answer { padding:8px 10px; width:240px; border-radius:8px; border:1px solid #3a4257; background:#111523; color:#fff; }
+    #setting { margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:center; }
+    .sym-el { position:absolute; font-size:60px; user-select:none; }
+    .badge { position:absolute; right:-6px; bottom:-6px; background:rgba(0,0,0,.6); color:#fff; 
+             font-size:12px; padding:2px 6px; border-radius:999px; border:1px solid rgba(255,255,255,.2); }
+    @media (max-width:1100px){ .card{ width:360px; height:360px; } .sym-el{ font-size:48px; } }
+    @media (max-width:780px){ .card{ width:320px; height:320px; } #answer{ width:200px; } .sym-el{ font-size:44px; } }
+  </style>
+</head>
+<body>
+  <div class="board">
+    <div class="card-wrapper">
+      <div id="yourCard" class="card"></div>
+      <h2 class="card-title">컴퓨터 🤖</h2>
+    </div>
+    <div class="card-wrapper">
+      <div id="myCard" class="card"></div>
+      <h2 class="card-title">내 카드: <b id="myCount">-</b></h2>
+    </div>
+  </div>
+
+  <div class="box">
+    <div id="answerbox">
+      <h2 id="feedback">겹치는 심볼을 입력하세요 (이모지 또는 번호)</h2>
+      <form id="gameForm" autocomplete="off">
+        <input id="answer" type="text" placeholder="예: 🍍  또는  28"/>
+      </form>
+      <div id="setting">
+        <button id="start" class="start">시작하기</button>
+        <select id="level" class="level" onchange="level()">
+          <option value="1" selected>LEVEL1</option>
+          <option value="2">LEVEL2</option>
+          <option value="3">LEVEL3</option>
+        </select>
+      </div>
+      <div id="timeBar"></div>
+    </div>
+  </div>
+
+  <script>
+    // ===== 난이도/상태 =====
+    const LEVEL_CARDS = { 1:10, 2:15, 3:20 };
+    const myCard = document.getElementById("myCard");
+    const yourCard = document.getElementById("yourCard");
+    const feedback = document.getElementById("feedback");
+    const answerInput = document.getElementById("answer");
+    const startBtn = document.getElementById("start");
+    const myCountEl = document.getElementById("myCount");
+    const timeBar = document.getElementById("timeBar");
+
+    let currentLevel = 1;
+    let total = LEVEL_CARDS[currentLevel];
+    let myCardsLeft = total;
+    let duration = 30;
+    let timerId = null;
+    let moveTimer = null;
+    let isRunning = false;
+
+    // ===== 57개 이모지 풀 (고유) =====
+    const emojiPool = [
+      "⭐","🌙","☀️","⚡️","🔥","💧","❄️","🌈","☁️","🌪️",
+      "🌟","🌊","🪐","🌍","🌋","🌸","🌼","🍀","🍁","🍄",
+      "🌵","🌿","🍎","🍌","🍇","🍓","🍉","🍍","🥕","🌽",
+      "🧀","🍞","🍔","🍟","🍕","🍩","🍪","🍰","🍫","☕️",
+      "🍵","🧊","🎈","🎲","🎯","🎵","🎧","🎮","🧩","🧭",
+      "⏰","💡","🔒","🔑","✏️","📌","📎"
+    ]; // 길이 57
+
+    // ===== 도블 덱 생성기 (사영 평면 n=7) =====
+    let allSymbols = []; // id → {id, icon}
+    let deck = [];       // 각 카드: 심볼 객체 배열(8개)
+
+    function buildDobble(n=7){
+      const SYM_COUNT = n*n + n + 1; // 57
+      allSymbols = Array.from({length: SYM_COUNT}, (_,i)=>({
+        id:i,
+        icon: emojiPool[i]
+      }));
+
+      // 좌표 id
+      const idXY = (x,y)=> x*n + y;
+      const A = (a)=> n*n + a;     // slope a용 무한 심볼
+      const A_INF = n*n + n;       // 수직용 무한 심볼
+
+      const raw = [];
+
+      // (1) y = a x + b 직선군 + A(a)
+      for(let a=0;a<n;a++){
+        for(let b=0;b<n;b++){
+          const ids=[];
+          for(let x=0;x<n;x++){
+            const y = (a*x + b) % n;
+            ids.push(idXY(x,y));
+          }
+          ids.push(A(a));
+          raw.push(ids);
+        }
+      }
+
+      // (2) 수직 x=c + A_INF
+      for(let c=0;c<n;c++){
+        const ids=[];
+        for(let y=0;y<n;y++) ids.push(idXY(c,y));
+        ids.push(A_INF);
+        raw.push(ids);
+      }
+
+      // (3) 무한 카드: A(0..n-1) + A_INF
+      raw.push([...Array(n).keys()].map(A).concat([A_INF]));
+
+      deck = raw.map(ids => ids.map(id => allSymbols[id]));
+    }
+
+    // ===== 라운드 카드 뽑기 (정확히 1개 공통) =====
+    let my=[], your=[], mySymbols=[], yourSymbols=[];
+
+    function makeDobbleRound(){
+      const i = Math.floor(Math.random()*deck.length);
+      let j = Math.floor(Math.random()*deck.length);
+      while(j===i) j = Math.floor(Math.random()*deck.length);
+      my = deck[i]; your = deck[j];
+    }
+
+    // ===== 렌더 & 애니메이션 =====
+    function randomSpeed(max){ return Math.random()*max - Math.random()*max; }
+
+    function MovingSymbol(sym, parent){
+      const rect = parent.getBoundingClientRect();
+      const W = rect.width, H = rect.height;
+      const pad = 60;
+
+      this.x = Math.random()*(W-pad);
+      this.y = Math.random()*(H-pad);
+      this.vx = randomSpeed(2);
+      this.vy = randomSpeed(2);
+
+      const el = document.createElement("div");
+      el.className = "sym-el";
+      el.style.left = this.x+"px";
+      el.style.top  = this.y+"px";
+      el.innerHTML = `<span class="emoji">${sym.icon}</span><span class="badge">${sym.id+1}</span>`;
+      parent.appendChild(el);
+      this.el = el;
+
+      this.move = ()=>{
+        this.x += this.vx;
+        this.y += this.vy;
+        if(this.x<0 || this.x>W-pad) this.vx*=-1;
+        if(this.y<0 || this.y>H-pad) this.vy*=-1;
+        this.el.style.left = this.x+"px";
+        this.el.style.top  = this.y+"px";
+      };
+    }
+
+    function drawCards(){
+      myCard.innerHTML=""; yourCard.innerHTML="";
+      mySymbols=[]; yourSymbols=[];
+
+      my.forEach(sym=> mySymbols.push(new MovingSymbol(sym, myCard)));
+      your.forEach(sym=> yourSymbols.push(new MovingSymbol(sym, yourCard)));
+
+      clearInterval(moveTimer);
+      moveTimer = setInterval(()=>{
+        mySymbols.forEach(s=>s.move());
+        yourSymbols.forEach(s=>s.move());
+      }, 1000/60);
+    }
+
+    // ===== 공통 심볼 id 찾기 (정확히 1개) =====
+    function findCommonId(){
+      const set = new Set(my.map(s=>s.id));
+      for(const s of your) if(set.has(s.id)) return s.id;
+      return null;
+    }
+
+    // ===== 난이도 변경 =====
+    function level(){
+      const lv = Number(document.getElementById("level").value);
+      if(isRunning){
+        alert("레벨이 변경되었습니다. 시작하기를 눌러주세요");
+        feedback.textContent = "시작하기를 눌러주세요";
+        clearInterval(timerId); clearInterval(moveTimer);
+        isRunning=false;
+      }
+      currentLevel = lv;
+      total = LEVEL_CARDS[currentLevel];
+      myCardsLeft = total;
+      myCountEl.textContent = myCardsLeft;
+      answerInput.value = "";
+    }
+    window.level = level; // inline onchange와 연결
+
+    // ===== 타이머 =====
+    function startTimer(){
+      clearInterval(timerId);
+      timeBar.style.width="100%";
+      timeBar.style.background="rgb(40,249,40)";
+      let remaining = duration;
+
+      timerId = setInterval(()=>{
+        remaining--;
+        const pct = Math.max(0, (remaining/duration)*100);
+        timeBar.style.width = pct+"%";
+        if(pct<30) timeBar.style.background="red";
+        else if(pct<50) timeBar.style.background="orange";
+        else timeBar.style.background="rgb(40,249,40)";
+
+        if(remaining<=0){
+          clearInterval(timerId); clearInterval(moveTimer);
+          alert("⏰ 시간 초과! 다시하세요!");
+          feedback.textContent="시작하기를 눌러주세요";
+          isRunning=false;
+        }
+      }, 1000);
+    }
+
+    // ===== 입력 처리 (이모지 또는 번호) =====
+    function submitAnswer(){
+      const raw = answerInput.value.trim();
+      if(!raw) return;
+
+      const commonId = findCommonId();
+      let correct = false;
+
+      // 숫자(배지 번호) 입력
+      if(/^\d+$/.test(raw)){
+        const idx = Number(raw)-1; // 1-based → 0-based
+        correct = (idx === commonId);
+      } else {
+        // 이모지 입력
+        const sym = allSymbols[commonId];
+        correct = (raw === sym.icon);
+      }
+
+      if(correct){
+        myCardsLeft--;
+        feedback.textContent="정답";
+      } else {
+        myCardsLeft++;
+        feedback.textContent="오답";
+      }
+      myCountEl.textContent = myCardsLeft;
+      answerInput.value = "";
+
+      if(myCardsLeft===0){
+        alert("성공하셨습니다.");
+        feedback.textContent="시작하기를 눌러주세요";
+        clearInterval(timerId); clearInterval(moveTimer);
+        isRunning=false; return;
+      }
+
+      makeDobbleRound();
+      drawCards();
+    }
+
+    // ===== 이벤트 =====
+    document.getElementById("gameForm").addEventListener("submit",(e)=>{
+      e.preventDefault();
+      if(!isRunning){ alert("시작하기를 눌러주세요"); return; }
+      submitAnswer();
+    });
+
+    startBtn.addEventListener("click", ()=>{
+      buildDobble(7);             // 57개 이모지 → 도블 덱
+      myCardsLeft = total;
+      myCountEl.textContent = myCardsLeft;
+      feedback.textContent = "겹치는 심볼을 입력하세요 (이모지 또는 번호)";
+      makeDobbleRound();
+      drawCards();
+      startTimer();
+      isRunning = true;
+    });
+  </script>
+</body>
+</html>

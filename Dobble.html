@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Dobble Game</title>
     <!--
     Dobble game 룰
     같은 그림의 이미지가 있으면 그 이미지의 이름을 타이핑해서 자신의 카드를 하나씩 줄여나가는 게임
@@ -130,7 +130,7 @@
     <div id="box" class="box">
       <div id="answerbox">
         <h2>
-          <div id="feedback">겹치는 심볼을 입력하세요</div>
+          <div id="feedback">시작하기를 눌러주세요</div>
         </h2>
         <form id="gameForm" autocomplete="off">
           <input id="answer" type="text" />
@@ -169,7 +169,7 @@
       ];
 
       const LEVEL_CARDS = {
-        1: 10,
+        1: 3,
         2: 15,
         3: 20,
       };
@@ -266,6 +266,9 @@
         myCard.innerHTML = "";
         yourCard.innerHTML = "";
 
+        mySymbols = [];
+        yourSymbols = [];
+
         my.forEach((sym) => {
           mySymbols.push(new MovingSymbols(sym, myCard));
         });
@@ -315,7 +318,7 @@
           if (percent < 30) timeBar.style.background = "red";
           else if (percent < 50) timeBar.style.background = "orange";
 
-          if (remaining <= -1) {
+          if (remaining <= -1) {//css랑 셋인터벌 랜더링이 같이 이뤄지면서 타임바가 남는 현상이 나타남 이를 수정 해보기
             clearInterval(timerId);
             clearInterval(moveTimer);
             alert("⏰ 시간 초과! 다시하세요!");
@@ -329,6 +332,11 @@
       function submitAnswer() {
         const answer = document.getElementById("answer").value;
         const correct = findSymbolsNames();
+
+        if (!isRunning) {
+          alert("시작하기를 눌러주세요");
+          feedback.textContent = "시작하기를 눌러주세요";
+        }
 
         if (correct.includes(answer)) {
           myCardsLeft--;
@@ -355,11 +363,12 @@
       }
 
       document.getElementById("gameForm").addEventListener("submit", (e) => {
-        if(!isRunning){
+        e.preventDefault();
+        if (!isRunning) {
           alert("시작하기를 눌러주세요");
           return;
         }
-        e.preventDefault();
+
         submitAnswer();
       });
 
@@ -367,6 +376,7 @@
         myCardsLeft = total;
         myCountEl.textContent = myCardsLeft;
         feedback.textContent = "겹치는 심볼을 입력하세요";
+        answerInput.value = "";
         makeRandomCard();
         drawCards();
         startTimer();
